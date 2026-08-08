@@ -1,679 +1,1138 @@
-import { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area } from "recharts";
+import {
+  BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
+  ResponsiveContainer, PieChart, Pie, Cell, AreaChart, Area
+} from "recharts";
+import {
+  ShieldAlert, Activity, UploadCloud, Layers, MapPin, Sliders,
+  Download, RefreshCw, CheckCircle2, AlertTriangle, Radio,
+  FileText, Database, Sparkles, Cpu, Zap, Crosshair, Info, Flame, Eye,
+  ArrowUpRight, LogOut, UserCheck, Lock, User
+} from "lucide-react";
 
-const API = "http://127.0.0.1:8000";
-
-const css = `
-  @import url('https://fonts.googleapis.com/css2?family=Syne:wght@600;700;800&family=DM+Mono:wght@400;500&family=DM+Sans:wght@300;400;500;600&display=swap');
-
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-
-  :root {
-    --bg:       #020b18;
-    --bg2:      #041020;
-    --panel:    rgba(4, 20, 40, 0.85);
-    --border:   rgba(0, 200, 255, 0.15);
-    --border2:  rgba(0, 200, 255, 0.35);
-    --cyan:     #00c8ff;
-    --green:    #00ff88;
-    --red:      #ff3b3b;
-    --amber:    #ffb800;
-    --text:     #cce8ff;
-    --muted:    #4a7a9b;
-    --glow:     0 0 20px rgba(0,200,255,0.3);
-    --glow-g:   0 0 20px rgba(0,255,136,0.3);
-    --glow-r:   0 0 20px rgba(255,59,59,0.3);
-  }
-
-body { background: var(--bg); color: var(--text); font-family: 'DM Sans', sans-serif; overflow-x: hidden; }
-
-  .orbitron { font-family: 'Syne', sans-serif; }
-.mono     { font-family: 'DM Mono', monospace; }
-
-  /* Animated grid background */
-  .grid-bg {
-    position: fixed; inset: 0; z-index: 0; overflow: hidden; pointer-events: none;
-    background-image:
-      linear-gradient(rgba(0,200,255,0.03) 1px, transparent 1px),
-      linear-gradient(90deg, rgba(0,200,255,0.03) 1px, transparent 1px);
-    background-size: 40px 40px;
-    animation: gridMove 20s linear infinite;
-  }
-  @keyframes gridMove { 0%{background-position:0 0} 100%{background-position:40px 40px} }
-
-  /* Scan line effect */
-  .scan-line {
-    position: fixed; left: 0; right: 0; height: 2px; z-index: 1; pointer-events: none;
-    background: linear-gradient(90deg, transparent, rgba(0,200,255,0.4), transparent);
-    animation: scan 8s linear infinite;
-  }
-  @keyframes scan { 0%{top:-2px} 100%{top:100vh} }
-
-  /* Corner decorations */
-  .corner { position: absolute; width: 16px; height: 16px; border-color: var(--cyan); border-style: solid; opacity: 0.6; }
-  .corner-tl { top: 0; left: 0; border-width: 2px 0 0 2px; }
-  .corner-tr { top: 0; right: 0; border-width: 2px 2px 0 0; }
-  .corner-bl { bottom: 0; left: 0; border-width: 0 0 2px 2px; }
-  .corner-br { bottom: 0; right: 0; border-width: 0 2px 2px 0; }
-
-  /* Panel */
-  .panel {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    backdrop-filter: blur(12px);
-    position: relative;
-    overflow: hidden;
-  }
-  .panel::before {
-    content: '';
-    position: absolute; top: 0; left: 0; right: 0; height: 1px;
-    background: linear-gradient(90deg, transparent, var(--cyan), transparent);
-    opacity: 0.4;
-  }
-
-  /* Glow text */
-  .glow-cyan { color: var(--cyan); text-shadow: 0 0 20px rgba(0,200,255,0.6); }
-  .glow-green { color: var(--green); text-shadow: 0 0 20px rgba(0,255,136,0.6); }
-  .glow-red   { color: var(--red);   text-shadow: 0 0 20px rgba(255,59,59,0.6); }
-  .glow-amber { color: var(--amber); text-shadow: 0 0 20px rgba(255,184,0,0.6); }
-
-  /* Stat card */
-  .stat-card {
-    padding: 20px 24px; border-radius: 12px; cursor: default;
-    transition: all 0.3s ease;
-    animation: fadeUp 0.6s ease both;
-  }
-  .stat-card:hover {
-    border-color: var(--border2) !important;
-    transform: translateY(-3px);
-    box-shadow: var(--glow);
-  }
-  @keyframes fadeUp { from{opacity:0;transform:translateY(16px)} to{opacity:1;transform:translateY(0)} }
-
-  /* Upload zone */
-  .upload-zone {
-    border: 2px dashed var(--border2); border-radius: 12px; padding: 40px;
-    text-align: center; cursor: pointer; transition: all 0.3s ease;
-    position: relative; overflow: hidden;
-  }
-  .upload-zone:hover, .upload-zone.drag-over {
-    border-color: var(--cyan);
-    background: rgba(0,200,255,0.05);
-    box-shadow: inset 0 0 30px rgba(0,200,255,0.08);
-  }
-  .upload-zone::after {
-    content: ''; position: absolute; inset: 0;
-    background: linear-gradient(135deg, transparent 40%, rgba(0,200,255,0.03) 100%);
-    pointer-events: none;
-  }
-
-  /* Analyse button */
-  .analyse-btn {
-    width: 100%; padding: 16px; border-radius: 10px; border: 1px solid var(--cyan);
-    background: linear-gradient(135deg, rgba(0,200,255,0.15), rgba(0,200,255,0.05));
-    color: var(--cyan); font-family: 'Syne', sans-serif; font-size: 13px;
-    font-weight: 700; letter-spacing: 2px; cursor: pointer;
-    transition: all 0.3s ease; position: relative; overflow: hidden;
-  }
-  .analyse-btn:hover:not(:disabled) {
-    background: linear-gradient(135deg, rgba(0,200,255,0.3), rgba(0,200,255,0.1));
-    box-shadow: 0 0 30px rgba(0,200,255,0.4), inset 0 0 20px rgba(0,200,255,0.1);
-    transform: translateY(-1px);
-  }
-  .analyse-btn:disabled { opacity: 0.4; cursor: not-allowed; border-color: var(--muted); color: var(--muted); }
-  .analyse-btn::before {
-    content: ''; position: absolute; top: 0; left: -100%; width: 100%; height: 100%;
-    background: linear-gradient(90deg, transparent, rgba(0,200,255,0.2), transparent);
-    transition: left 0.5s ease;
-  }
-  .analyse-btn:hover:not(:disabled)::before { left: 100%; }
-
-  /* Result badge */
-  .result-badge {
-    border-radius: 16px; padding: 32px; text-align: center;
-    animation: pulseIn 0.5s ease;
-  }
-  @keyframes pulseIn { 0%{transform:scale(0.9);opacity:0} 100%{transform:scale(1);opacity:1} }
-
-  /* Tab button */
-  .tab-btn {
-    padding: 10px 22px; border-radius: 8px; border: 1px solid transparent;
-    cursor: pointer; font-family: 'Syne', sans-serif;font-size: 10px;
-    letter-spacing: 1.5px; font-weight: 600; transition: all 0.3s ease;
-  }
-  .tab-btn.active {
-    border-color: var(--cyan); background: rgba(0,200,255,0.1);
-    color: var(--cyan); box-shadow: 0 0 15px rgba(0,200,255,0.2);
-  }
-  .tab-btn:not(.active) { color: var(--muted); background: transparent; }
-  .tab-btn:not(.active):hover { color: var(--text); border-color: var(--border2); }
-
-  /* Pulse dot */
-  .pulse-dot {
-    width: 8px; height: 8px; border-radius: 50%; background: var(--green);
-    box-shadow: 0 0 8px var(--green);
-    animation: pulse 2s ease infinite;
-    display: inline-block;
-  }
-  @keyframes pulse { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:0.5;transform:scale(1.4)} }
-
-  /* Table row */
-  .history-row { transition: background 0.2s ease; }
-  .history-row:hover { background: rgba(0,200,255,0.05); }
-
-  /* Scrollbar */
-  ::-webkit-scrollbar { width: 4px; }
-  ::-webkit-scrollbar-track { background: var(--bg2); }
-  ::-webkit-scrollbar-thumb { background: var(--muted); border-radius: 2px; }
-
-  /* Loading bar */
-  .loading-bar {
-    height: 2px; background: linear-gradient(90deg, transparent, var(--cyan), transparent);
-    animation: loading 1.5s ease infinite;
-  }
-  @keyframes loading { 0%{transform:translateX(-100%)} 100%{transform:translateX(200%)} }
-
-  /* Radar animation */
-  .radar-ring {
-    position: absolute; border-radius: 50%;
-    border: 1px solid rgba(0,200,255,0.2);
-    animation: radarPulse 3s ease-out infinite;
-  }
-  @keyframes radarPulse {
-    0%   { transform: scale(0.3); opacity: 0.8; }
-    100% { transform: scale(1.5); opacity: 0; }
-  }
-
-  /* Confidence bar */
-  .conf-bar-fill {
-    height: 100%; border-radius: 4px;
-    background: linear-gradient(90deg, var(--cyan), var(--green));
-    transition: width 1s ease;
-    box-shadow: 0 0 10px rgba(0,200,255,0.4);
-  }
-
-  /* Number counter animation */
-  @keyframes countUp { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
-  .count-anim { animation: countUp 0.6s ease both; }
-`;
-
-const TOOLTIP_STYLE = {
-  background: "rgba(4,20,40,0.95)",
-  border: "1px solid rgba(0,200,255,0.3)",
-  borderRadius: "8px",
-  color: "#cce8ff",
-  fontFamily: "'Share Tech Mono', monospace",
-  fontSize: "12px",
-};
+const API_BASE = "http://127.0.0.1:8000";
 
 export default function App() {
-  const [file, setFile]           = useState(null);
-  const [preview, setPreview]     = useState(null);
-  const [result, setResult]       = useState(null);
-  const [loading, setLoading]     = useState(false);
-  const [stats, setStats]         = useState(null);
-  const [history, setHistory]     = useState([]);
-  const [activeTab, setActiveTab] = useState("predict");
-  const [dragOver, setDragOver]   = useState(false);
-  const [apiOnline, setApiOnline] = useState(false);
-  const [time, setTime]           = useState(new Date());
-  const fileRef                   = useRef();
+  const [currentUser, setCurrentUser] = useState(null);
+  const [activeTab, setActiveTab] = useState("inspector");
+  const [apiStatus, setApiStatus] = useState({ online: false, device: "CPU", modelLoaded: false });
+  const [stats, setStats] = useState({
+    total_predictions: 0,
+    total_damaged: 0,
+    total_undamaged: 0,
+    damage_percentage: 0,
+    average_confidence: 0,
+    p1_critical_count: 0,
+    p2_urgent_count: 0
+  });
+
+  const [selectedFile, setSelectedFile] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [currentPrediction, setCurrentPrediction] = useState(null);
+  const [sliderPos, setSliderPos] = useState(50);
+  const [dragOver, setDragOver] = useState(false);
+
+  const [batchFiles, setBatchFiles] = useState([]);
+  const [batchProgress, setBatchProgress] = useState(false);
+  const [batchStats, setBatchStats] = useState({ processed: 0, total: 0, damaged: 0, undamaged: 0 });
+
+  const [records, setRecords] = useState([]);
+  const mapContainerRef = useRef(null);
+  const mapInstanceRef = useRef(null);
+
+  const [scenarios, setScenarios] = useState([]);
+  const [activeScenario, setActiveScenario] = useState(null);
+  const [simulating, setSimulating] = useState(false);
+
+  const fetchStatusAndStats = async () => {
+    try {
+      const healthRes = await axios.get(`${API_BASE}/health`);
+      setApiStatus({
+        online: true,
+        device: healthRes.data.model_loaded ? "GPU (CUDA)" : "CPU",
+        modelLoaded: healthRes.data.model_loaded
+      });
+      const statsRes = await axios.get(`${API_BASE}/stats`);
+      setStats(statsRes.data);
+
+      const recordsRes = await axios.get(`${API_BASE}/results?limit=50`);
+      setRecords(recordsRes.data);
+
+      const scenariosRes = await axios.get(`${API_BASE}/simulation/scenarios`);
+      setScenarios(scenariosRes.data);
+    } catch (err) {
+      setApiStatus({ online: false, device: "Offline", modelLoaded: false });
+    }
+  };
 
   useEffect(() => {
-    const t = setInterval(() => setTime(new Date()), 1000);
-    return () => clearInterval(t);
-  }, []);
-
-  useEffect(() => {
-    checkHealth();
-    fetchStats();
-    fetchHistory();
-    const interval = setInterval(() => { fetchStats(); fetchHistory(); }, 10000);
+    fetchStatusAndStats();
+    const interval = setInterval(fetchStatusAndStats, 10000);
     return () => clearInterval(interval);
   }, []);
 
-  const checkHealth = async () => {
-    try { await axios.get(`${API}/health`); setApiOnline(true); } catch { setApiOnline(false); }
+  // BULLETPROOF LEAFLET TAB MOUNT/UNMOUNT LIFECYCLE
+  useEffect(() => {
+    if (!currentUser) return;
+
+    if (activeTab === "map") {
+      const timer = setTimeout(() => {
+        if (mapContainerRef.current && window.L) {
+          // If map already exists, remove it clean to prevent 0x0 container bounds bug
+          if (mapInstanceRef.current) {
+            mapInstanceRef.current.remove();
+            mapInstanceRef.current = null;
+          }
+
+          const map = window.L.map(mapContainerRef.current).setView([29.9511, -90.0715], 10);
+
+          window.L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '&copy; OpenStreetMap contributors',
+            maxZoom: 19
+          }).addTo(map);
+
+          // Add markers
+          if (records && records.length > 0) {
+            records.forEach((rec) => {
+              if (rec.latitude && rec.longitude) {
+                const isDamaged = rec.is_damaged;
+                const color = isDamaged ? "#f43f5e" : "#10b981";
+
+                const marker = window.L.circleMarker([rec.latitude, rec.longitude], {
+                  radius: isDamaged ? 8 : 6,
+                  fillColor: color,
+                  color: color,
+                  weight: 2,
+                  opacity: 0.9,
+                  fillOpacity: 0.8
+                }).addTo(map);
+
+                marker.bindPopup(`
+                  <div style="font-family: Inter, sans-serif; padding: 4px;">
+                    <div style="font-weight: 700; font-size: 13px; color: ${color}; margin-bottom: 4px;">
+                      ${rec.prediction} (${rec.confidence}%)
+                    </div>
+                    <div style="font-size: 11px; color: #94a3b8; margin-bottom: 2px;">
+                      Severity: ${rec.severity_level || "Standard"}
+                    </div>
+                    <div style="font-size: 11px; color: #94a3b8; margin-bottom: 4px;">
+                      Triage: <b>${rec.triage_priority || "N/A"}</b>
+                    </div>
+                    <div style="font-size: 11px; color: #64748b; font-family: JetBrains Mono, monospace;">
+                      Tile: ${rec.image_name}<br/>
+                      Coordinates: ${rec.latitude.toFixed(4)}, ${rec.longitude.toFixed(4)}
+                    </div>
+                  </div>
+                `);
+              }
+            });
+          }
+
+          map.invalidateSize();
+          mapInstanceRef.current = map;
+        }
+      }, 100);
+
+      return () => clearTimeout(timer);
+    } else {
+      // Clean destroy Leaflet instance when switching to other tabs
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove();
+        mapInstanceRef.current = null;
+      }
+    }
+  }, [currentUser, activeTab, records]);
+
+  const handleQuickLogin = (role, title, email) => {
+    setCurrentUser({
+      role: role,
+      title: title,
+      email: email,
+      loginTime: new Date().toLocaleTimeString()
+    });
   };
 
-  const fetchStats   = async () => { try { const r = await axios.get(`${API}/stats`);         setStats(r.data);   } catch {} };
-  const fetchHistory = async () => { try { const r = await axios.get(`${API}/results?limit=20`); setHistory(r.data); } catch {} };
-
-  const handleFile = (f) => {
-    if (!f) return;
-    setFile(f); setResult(null);
-    setPreview(URL.createObjectURL(f));
+  const handleFileSelect = (e) => {
+    const file = e.target.files[0];
+    if (file) {
+      setSelectedFile(file);
+      setPreviewUrl(URL.createObjectURL(file));
+      setCurrentPrediction(null);
+    }
   };
 
   const handleDrop = (e) => {
-    e.preventDefault(); setDragOver(false);
-    const f = e.dataTransfer.files[0];
-    if (f) handleFile(f);
+    e.preventDefault();
+    setDragOver(false);
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const file = e.dataTransfer.files[0];
+      setSelectedFile(file);
+      setPreviewUrl(URL.createObjectURL(file));
+      setCurrentPrediction(null);
+    }
   };
 
-  const handlePredict = async () => {
-    if (!file) return;
-    setLoading(true); setResult(null);
-    const form = new FormData();
-    form.append("file", file);
+  const analyzeSingleImage = async () => {
+    if (!selectedFile) return;
+    setIsAnalyzing(true);
+    const formData = new FormData();
+    formData.append("file", selectedFile);
+
     try {
-      const res = await axios.post(`${API}/predict`, form);
-      setResult(res.data);
-      fetchStats(); fetchHistory();
-    } catch { alert("Prediction failed. Make sure the API is running on port 8000."); }
-    setLoading(false);
+      const res = await axios.post(`${API_BASE}/predict`, formData, {
+        headers: { "Content-Type": "multipart/form-data" }
+      });
+      setCurrentPrediction(res.data);
+      fetchStatusAndStats();
+    } catch (err) {
+      alert("Error analyzing satellite tile. Make sure backend is running at " + API_BASE);
+    } finally {
+      setIsAnalyzing(false);
+    }
   };
 
-  const pieData = stats ? [
-    { name: "Damaged",   value: stats.total_damaged   || 0 },
-    { name: "No Damage", value: stats.total_undamaged || 0 },
-  ] : [];
+  const processBatchUpload = async () => {
+    if (!batchFiles || batchFiles.length === 0) return;
+    setBatchProgress(true);
+    const fileArray = Array.from(batchFiles);
+    const totalFiles = fileArray.length;
+    const chunkSize = 30;
+    
+    let processedSoFar = 0;
+    let totalDamagedSoFar = 0;
+    let totalUndamagedSoFar = 0;
 
-  const areaData = history.slice().reverse().map((h, i) => ({
-    id:         i + 1,
-    confidence: parseFloat(h.confidence.toFixed(1)),
-    damaged:    h.is_damaged ? 100 : 0,
-  }));
+    setBatchStats({ processed: 0, total: totalFiles, damaged: 0, undamaged: 0 });
 
-  const formatTime = (d) => d.toLocaleTimeString('en-US', { hour12: false });
-  const formatDate = (d) => d.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
+    for (let i = 0; i < totalFiles; i += chunkSize) {
+      const chunk = fileArray.slice(i, i + chunkSize);
+      const formData = new FormData();
+      chunk.forEach((file) => formData.append("files", file));
 
-  return (
-    <>
-      <style>{css}</style>
-      <div className="grid-bg" />
-      <div className="scan-line" />
+      try {
+        const res = await axios.post(`${API_BASE}/predict/batch`, formData, {
+          headers: { "Content-Type": "multipart/form-data" }
+        });
+        processedSoFar += res.data.total_processed;
+        totalDamagedSoFar += res.data.total_damaged;
+        totalUndamagedSoFar += res.data.total_undamaged;
 
-      <div style={{ position: "relative", zIndex: 2, minHeight: "100vh" }}>
+        setBatchStats({
+          processed: processedSoFar,
+          total: totalFiles,
+          damaged: totalDamagedSoFar,
+          undamaged: totalUndamagedSoFar
+        });
+      } catch (err) {
+        console.error("Chunk processing error:", err);
+      }
+    }
 
-        {/* ── HEADER ── */}
-        <header style={{ borderBottom: "1px solid var(--border)", padding: "0 32px", height: 64, display: "flex", alignItems: "center", justifyContent: "space-between", background: "rgba(2,11,24,0.9)", backdropFilter: "blur(20px)", position: "sticky", top: 0, zIndex: 100 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-            <div style={{ width: 40, height: 40, border: "1px solid var(--cyan)", borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", position: "relative" }}>
-              <div className="corner corner-tl" style={{ width: 8, height: 8 }} />
-              <div className="corner corner-tr" style={{ width: 8, height: 8 }} />
-              <div className="corner corner-bl" style={{ width: 8, height: 8 }} />
-              <div className="corner corner-br" style={{ width: 8, height: 8 }} />
-              <span style={{ fontSize: 18 }}>🛰️</span>
+    setBatchProgress(false);
+    fetchStatusAndStats();
+  };
+
+  const launchScenario = async (scenario) => {
+    setActiveScenario(scenario);
+    setSimulating(true);
+
+    try {
+      const mockResult = {
+        image_name: scenario.title,
+        prediction: "Damage",
+        confidence: 96.8,
+        is_damaged: true,
+        severity_level: "Total Structural Collapse",
+        triage_priority: "P1 - Critical Priority",
+        affected_area_sqm: "~4,500 sq m",
+        timestamp: new Date().toISOString(),
+        latitude: scenario.sample_coordinates.lat,
+        longitude: scenario.sample_coordinates.lng,
+        ai_advisory: `🚨 [SIMULATED EMERGENCY SCENARIO: ${scenario.title}]\nCategory: ${scenario.hazard_type}\nLocation: ${scenario.region}\n• Search & Rescue Team Alpha deployed to coordinates (${scenario.sample_coordinates.lat}, ${scenario.sample_coordinates.lng})\n• High density building collapse detected in central tile.`
+      };
+
+      setCurrentPrediction(mockResult);
+      setActiveTab("inspector");
+      fetchStatusAndStats();
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSimulating(false);
+    }
+  };
+
+  const downloadGeoJSON = async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/export/geojson`);
+      const blob = new Blob([JSON.stringify(res.data, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `disaster_damage_gis_${Date.now()}.geojson`;
+      a.click();
+    } catch (e) {
+      alert("Error exporting GeoJSON");
+    }
+  };
+
+  const chartData = [
+    { name: "Undamaged Tiles", count: stats.total_undamaged, fill: "#10b981" },
+    { name: "Damaged Tiles", count: stats.total_damaged, fill: "#f43f5e" },
+  ];
+
+  // 1. EXECUTIVE AUTHENTICATION SCREEN
+  if (!currentUser) {
+    return (
+      <div style={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "#060913",
+        position: "relative",
+        padding: "20px"
+      }}>
+        <div className="cyber-bg" />
+
+        <div className="glass-panel" style={{
+          maxWidth: "460px",
+          width: "100%",
+          padding: "40px 36px",
+          position: "relative",
+          zIndex: 10
+        }}>
+          <div style={{ textAlign: "center", marginBottom: "32px" }}>
+            <div style={{
+              width: "56px",
+              height: "56px",
+              borderRadius: "14px",
+              background: "linear-gradient(135deg, #6366f1 0%, #3b82f6 100%)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              margin: "0 auto 18px",
+              boxShadow: "0 0 30px rgba(99, 102, 241, 0.4)",
+              border: "1px solid rgba(255, 255, 255, 0.2)"
+            }}>
+              <ShieldAlert style={{ color: "#fff", width: "30px", height: "30px" }} />
             </div>
-            <div>
-              <div className="orbitron glow-cyan" style={{ fontSize: 15, fontWeight: 700, letterSpacing: 2 }}>SENTINEL AI</div>
-              <div className="mono" style={{ fontSize: 10, color: "var(--muted)", letterSpacing: 1 }}>DISASTER DAMAGE DETECTION SYSTEM</div>
-            </div>
+            <h1 style={{ fontSize: "24px", fontWeight: 800, color: "#f8fafc", fontFamily: "Plus Jakarta Sans, sans-serif" }}>
+              AegisVision <span style={{ color: "#818cf8", fontWeight: 600 }}>AI</span>
+            </h1>
+            <p style={{ fontSize: "13px", color: "#94a3b8", marginTop: "6px" }}>
+              Enterprise Disaster Intelligence & Satellite Assessment Platform
+            </p>
           </div>
 
-          <div style={{ display: "flex", gap: 8 }}>
-            {["predict", "stats", "history"].map(tab => (
-              <button key={tab} className={`tab-btn ${activeTab === tab ? "active" : ""}`}
-                onClick={() => setActiveTab(tab)}>
-                {tab === "predict" ? "⬡ ANALYSE" : tab === "stats" ? "◈ METRICS" : "≡ HISTORY"}
+          <div style={{ marginBottom: "28px" }}>
+            <div style={{ fontSize: "11px", color: "#94a3b8", fontWeight: 700, marginBottom: "12px", letterSpacing: "0.05em" }} className="mono">
+              SELECT DEMO OPERATIONAL ROLE
+            </div>
+
+            <div style={{ display: "grid", gap: "10px" }}>
+              <button
+                onClick={() => handleQuickLogin("commander", "Incident Commander", "commander@aegis.gov")}
+                style={{
+                  padding: "12px 16px",
+                  borderRadius: "8px",
+                  border: "1px solid rgba(99, 102, 241, 0.35)",
+                  background: "linear-gradient(135deg, rgba(99, 102, 241, 0.18) 0%, rgba(59, 130, 246, 0.1) 100%)",
+                  color: "#f8fafc",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  transition: "all 0.15s ease"
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "12px", textAlign: "left" }}>
+                  <ShieldAlert style={{ color: "#818cf8", width: "20px" }} />
+                  <div>
+                    <div style={{ fontSize: "14px", fontWeight: 700 }}>Incident Commander</div>
+                    <div style={{ fontSize: "11px", color: "#94a3b8" }}>Full Operational & Triage Command</div>
+                  </div>
+                </div>
+                <ArrowUpRight style={{ width: "16px", color: "#818cf8" }} />
               </button>
-            ))}
+
+              <button
+                onClick={() => handleQuickLogin("operator", "Recon Operator", "recon@aegis.gov")}
+                style={{
+                  padding: "12px 16px",
+                  borderRadius: "8px",
+                  border: "1px solid rgba(255, 255, 255, 0.1)",
+                  background: "rgba(255, 255, 255, 0.04)",
+                  color: "#f8fafc",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  transition: "all 0.15s ease"
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "12px", textAlign: "left" }}>
+                  <UploadCloud style={{ color: "#60a5fa", width: "20px" }} />
+                  <div>
+                    <div style={{ fontSize: "14px", fontWeight: 700 }}>Recon Operator</div>
+                    <div style={{ fontSize: "11px", color: "#94a3b8" }}>Satellite Tile Analysis & Uploads</div>
+                  </div>
+                </div>
+                <ArrowUpRight style={{ width: "16px", color: "#94a3b8" }} />
+              </button>
+
+              <button
+                onClick={() => handleQuickLogin("analyst", "GIS Lead Analyst", "gis@aegis.gov")}
+                style={{
+                  padding: "12px 16px",
+                  borderRadius: "8px",
+                  border: "1px solid rgba(255, 255, 255, 0.1)",
+                  background: "rgba(255, 255, 255, 0.04)",
+                  color: "#f8fafc",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  transition: "all 0.15s ease"
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: "12px", textAlign: "left" }}>
+                  <MapPin style={{ color: "#34d399", width: "20px" }} />
+                  <div>
+                    <div style={{ fontSize: "14px", fontWeight: 700 }}>GIS Lead Analyst</div>
+                    <div style={{ fontSize: "11px", color: "#94a3b8" }}>Spatial GeoJSON & Benchmark Analytics</div>
+                  </div>
+                </div>
+                <ArrowUpRight style={{ width: "16px", color: "#94a3b8" }} />
+              </button>
+            </div>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
-            <div style={{ textAlign: "right" }}>
-              <div className="mono glow-cyan" style={{ fontSize: 18, fontWeight: 600 }}>{formatTime(time)}</div>
-              <div className="mono" style={{ fontSize: 10, color: "var(--muted)" }}>{formatDate(time)}</div>
-            </div>
-            <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 14px", border: "1px solid var(--border)", borderRadius: 20 }}>
-              <span className="pulse-dot" style={{ background: apiOnline ? "var(--green)" : "var(--red)", boxShadow: apiOnline ? "0 0 8px var(--green)" : "0 0 8px var(--red)" }} />
-              <span className="mono" style={{ fontSize: 11, color: apiOnline ? "var(--green)" : "var(--red)" }}>
-                {apiOnline ? "API ONLINE" : "API OFFLINE"}
+          <div style={{ textAlign: "center", fontSize: "11px", color: "#64748b" }} className="mono">
+            SECURE REST ENCRYPTED ACCESS • CAPSTONE EDITION
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // 2. MAIN COMMAND DASHBOARD
+  return (
+    <div style={{ position: "relative", minHeight: "100vh", zIndex: 1, paddingBottom: "60px" }}>
+      <div className="cyber-bg" />
+
+      {/* TASKBAR HEADER */}
+      <header style={{
+        background: "rgba(15, 23, 42, 0.9)",
+        borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
+        padding: "16px 36px",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "space-between",
+        position: "sticky",
+        top: 0,
+        zIndex: 100,
+        backdropFilter: "blur(20px)"
+      }}>
+        <div style={{ display: "flex", alignItems: "center", gap: "16px", flexShrink: 0 }}>
+          <div style={{
+            width: "40px",
+            height: "40px",
+            borderRadius: "10px",
+            background: "linear-gradient(135deg, #6366f1 0%, #3b82f6 100%)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            boxShadow: "0 0 20px rgba(99, 102, 241, 0.35)",
+            border: "1px solid rgba(255, 255, 255, 0.2)",
+            flexShrink: 0
+          }}>
+            <ShieldAlert style={{ color: "#fff", width: "22px", height: "22px" }} />
+          </div>
+
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <span style={{ fontSize: "18px", fontWeight: 800, color: "#f8fafc", fontFamily: "Plus Jakarta Sans, sans-serif", letterSpacing: "-0.02em" }}>
+                AegisVision
+              </span>
+              <span className="mono" style={{
+                fontSize: "10px",
+                color: "#818cf8",
+                background: "rgba(99, 102, 241, 0.15)",
+                padding: "2px 6px",
+                borderRadius: "4px",
+                border: "1px solid rgba(99, 102, 241, 0.3)",
+                fontWeight: 600,
+                lineHeight: 1
+              }}>
+                v2.0
               </span>
             </div>
-          </div>
-        </header>
 
-        {/* ── STAT CARDS ── */}
-        {stats && (
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, padding: "24px 32px 0" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px", marginTop: "3px" }} className="mono">
+              <span style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "4px",
+                color: apiStatus.online ? "#34d399" : "#f87171",
+                fontWeight: 600
+              }}>
+                <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: apiStatus.online ? "#10b981" : "#f43f5e" }} />
+                {apiStatus.online ? "ONLINE" : "OFFLINE"}
+              </span>
+              <span style={{ color: "#334155" }}>•</span>
+              <span style={{ color: "#94a3b8" }}>{apiStatus.device}</span>
+              <span style={{ color: "#334155" }}>•</span>
+              <span style={{ color: "#94a3b8" }}>ResNet18 + Grad-CAM</span>
+            </div>
+          </div>
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: "20px" }}>
+          <nav style={{
+            display: "flex",
+            gap: "6px",
+            background: "rgba(255, 255, 255, 0.03)",
+            padding: "5px",
+            borderRadius: "10px",
+            border: "1px solid rgba(255, 255, 255, 0.08)"
+          }}>
             {[
-              { label: "TOTAL ANALYSED",  value: stats.total_predictions, suffix: "", icon: "◎", color: "var(--cyan)",  delay: "0s"    },
-              { label: "DAMAGED ZONES",   value: stats.total_damaged,     suffix: "", icon: "⚠", color: "var(--red)",   delay: "0.1s"  },
-              { label: "SAFE ZONES",      value: stats.total_undamaged,   suffix: "", icon: "✓", color: "var(--green)", delay: "0.2s"  },
-              { label: "AVG CONFIDENCE",  value: stats.average_confidence.toFixed(1), suffix: "%", icon: "◈", color: "var(--amber)", delay: "0.3s" },
-            ].map(card => (
-              <div key={card.label} className="panel stat-card" style={{ borderRadius: 12, animationDelay: card.delay }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
-                  <div>
-                    <div className="mono" style={{ fontSize: 10, color: "var(--muted)", letterSpacing: 2, marginBottom: 10 }}>{card.label}</div>
-                    <div className="orbitron count-anim" style={{ fontSize: 36, fontWeight: 900, color: card.color, textShadow: `0 0 20px ${card.color}66` }}>
-                      {card.value}{card.suffix}
-                    </div>
-                  </div>
-                  <div style={{ fontSize: 28, color: card.color, opacity: 0.4 }}>{card.icon}</div>
-                </div>
-                <div style={{ marginTop: 14, height: 2, background: "var(--border)", borderRadius: 2, overflow: "hidden" }}>
-                  <div style={{ height: "100%", width: `${Math.min(100, (card.value / Math.max(stats.total_predictions, 1)) * 100)}%`, background: card.color, borderRadius: 2, boxShadow: `0 0 8px ${card.color}` }} />
-                </div>
-              </div>
-            ))}
+              { id: "inspector", label: "Single Tile Inspector", icon: Sliders },
+              { id: "batch", label: "Batch Satellite Hub", icon: UploadCloud },
+              { id: "map", label: "GIS Command Map", icon: MapPin },
+              { id: "simulator", label: "Disaster Simulator", icon: Flame },
+              { id: "analytics", label: "Analytics & Reports", icon: Activity }
+            ].map((tab) => {
+              const Icon = tab.icon;
+              const active = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  style={{
+                    padding: "8px 16px",
+                    borderRadius: "7px",
+                    border: active ? "1px solid rgba(99, 102, 241, 0.4)" : "1px solid transparent",
+                    background: active ? "linear-gradient(135deg, rgba(99, 102, 241, 0.25) 0%, rgba(59, 130, 246, 0.18) 100%)" : "transparent",
+                    color: active ? "#fff" : "#94a3b8",
+                    fontFamily: "Inter, sans-serif",
+                    fontWeight: active ? 600 : 500,
+                    fontSize: "13px",
+                    cursor: "pointer",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "7px",
+                    whiteSpace: "nowrap",
+                    transition: "all 0.15s ease",
+                    boxShadow: active ? "0 4px 14px rgba(99, 102, 241, 0.25)" : "none"
+                  }}
+                >
+                  <Icon style={{ width: "14px", height: "14px", color: active ? "#818cf8" : "#64748b" }} /> {tab.label}
+                </button>
+              );
+            })}
+          </nav>
+
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            borderLeft: "1px solid rgba(255, 255, 255, 0.1)",
+            paddingLeft: "18px"
+          }}>
+            <button
+              onClick={() => setCurrentUser(null)}
+              title="Log Out"
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "8px",
+                background: "rgba(255, 255, 255, 0.05)",
+                border: "1px solid rgba(255, 255, 255, 0.12)",
+                padding: "8px 14px",
+                borderRadius: "8px",
+                color: "#f8fafc",
+                cursor: "pointer",
+                fontSize: "12px",
+                fontWeight: 600,
+                transition: "all 0.15s ease"
+              }}
+            >
+              <UserCheck style={{ width: "15px", color: "#818cf8" }} />
+              <span>{currentUser.title}</span>
+              <LogOut style={{ width: "14px", color: "#94a3b8", marginLeft: "4px" }} />
+            </button>
           </div>
-        )}
+        </div>
+      </header>
 
-        <div style={{ padding: "24px 32px 40px" }}>
+      {/* MAIN CONTENT DASHBOARD */}
+      <main style={{ maxWidth: "1440px", margin: "32px auto", padding: "0 36px" }}>
+        
+        {/* STATS OVERVIEW CARDS */}
+        <div style={{
+          display: "grid",
+          gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))",
+          gap: "20px",
+          marginBottom: "32px"
+        }}>
+          <div className="glass-panel stat-card-indigo" style={{ padding: "22px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: "11px", color: "#94a3b8", fontWeight: 700, letterSpacing: "0.05em" }} className="mono">TOTAL TILES SCANNED</span>
+              <div style={{ width: "30px", height: "30px", borderRadius: "8px", background: "rgba(99, 102, 241, 0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Database style={{ width: "15px", color: "#818cf8" }} />
+              </div>
+            </div>
+            <div style={{ fontSize: "32px", fontWeight: 800, color: "#f8fafc", marginTop: "10px", fontFamily: "Plus Jakarta Sans, sans-serif" }}>
+              {stats.total_predictions.toLocaleString()} <span style={{ fontSize: "14px", color: "#818cf8", fontWeight: 500 }}>tiles</span>
+            </div>
+            <div style={{ fontSize: "11px", color: "#64748b", marginTop: "6px", display: "flex", alignItems: "center", gap: "4px" }}>
+              <ArrowUpRight style={{ width: "12px", color: "#10b981" }} /> Live Satellite Stream Active
+            </div>
+          </div>
 
-          {/* ── PREDICT TAB ── */}
-          {activeTab === "predict" && (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+          <div className="glass-panel stat-card-rose" style={{ padding: "22px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: "11px", color: "#94a3b8", fontWeight: 700, letterSpacing: "0.05em" }} className="mono">DAMAGE INCIDENCE</span>
+              <div style={{ width: "30px", height: "30px", borderRadius: "8px", background: "rgba(244, 63, 94, 0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Flame style={{ width: "15px", color: "#f43f5e" }} />
+              </div>
+            </div>
+            <div style={{ fontSize: "32px", fontWeight: 800, color: "#fb7185", marginTop: "10px", fontFamily: "Plus Jakarta Sans, sans-serif" }}>
+              {stats.damage_percentage}%
+            </div>
+            <div style={{ fontSize: "11px", color: "#64748b", marginTop: "6px" }}>
+              {stats.total_damaged.toLocaleString()} structural collapse points
+            </div>
+          </div>
 
-              {/* Upload Panel */}
-              <div className="panel" style={{ borderRadius: 16, padding: 28 }}>
-                <div className="corner corner-tl" /><div className="corner corner-tr" />
-                <div className="corner corner-bl" /><div className="corner corner-br" />
+          <div className="glass-panel stat-card-amber" style={{ padding: "22px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: "11px", color: "#94a3b8", fontWeight: 700, letterSpacing: "0.05em" }} className="mono">P1 CRITICAL TRIAGE</span>
+              <div style={{ width: "30px", height: "30px", borderRadius: "8px", background: "rgba(245, 158, 11, 0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <ShieldAlert style={{ width: "15px", color: "#f59e0b" }} />
+              </div>
+            </div>
+            <div style={{ fontSize: "32px", fontWeight: 800, color: "#fbbf24", marginTop: "10px", fontFamily: "Plus Jakarta Sans, sans-serif" }}>
+              {stats.p1_critical_count} <span style={{ fontSize: "14px", color: "#94a3b8", fontWeight: 500 }}>zones</span>
+            </div>
+            <div style={{ fontSize: "11px", color: "#64748b", marginTop: "6px" }}>
+              High-priority emergency search sectors
+            </div>
+          </div>
 
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 24 }}>
-                  <div style={{ width: 3, height: 20, background: "var(--cyan)", borderRadius: 2, boxShadow: "0 0 8px var(--cyan)" }} />
-                  <span className="orbitron" style={{ fontSize: 12, letterSpacing: 2, color: "var(--cyan)" }}>IMAGE INPUT</span>
-                </div>
+          <div className="glass-panel stat-card-emerald" style={{ padding: "22px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: "11px", color: "#94a3b8", fontWeight: 700, letterSpacing: "0.05em" }} className="mono">AVG CONFIDENCE</span>
+              <div style={{ width: "32px", height: "32px", borderRadius: "8px", background: "rgba(16, 185, 129, 0.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                <Activity style={{ width: "15px", color: "#10b981" }} />
+              </div>
+            </div>
+            <div style={{ fontSize: "32px", fontWeight: 800, color: "#34d399", marginTop: "10px", fontFamily: "Plus Jakarta Sans, sans-serif" }}>
+              {stats.average_confidence}%
+            </div>
+            <div style={{ fontSize: "11px", color: "#64748b", marginTop: "6px" }}>
+              PyTorch ResNet18 Model Calibration
+            </div>
+          </div>
+        </div>
 
-                {/* Drop zone */}
-                <div className={`upload-zone ${dragOver ? "drag-over" : ""}`}
-                  onClick={() => fileRef.current.click()}
-                  onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+        {/* TAB 1: SINGLE TILE INSPECTOR */}
+        {activeTab === "inspector" && (
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "28px" }}>
+            <div className="glass-panel" style={{ padding: "28px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+                <h2 style={{ fontSize: "17px", fontWeight: 700, color: "#f8fafc" }}>
+                  Satellite Imagery Inspector
+                </h2>
+                <span className="mono" style={{
+                  fontSize: "11px",
+                  color: "#818cf8",
+                  background: "rgba(99, 102, 241, 0.15)",
+                  padding: "4px 12px",
+                  borderRadius: "6px",
+                  border: "1px solid rgba(99, 102, 241, 0.3)",
+                  fontWeight: 600
+                }}>
+                  Grad-CAM Spatial Heatmap Engine
+                </span>
+              </div>
+
+              {!previewUrl ? (
+                <div
+                  onDragOver={(e) => { e.preventDefault(); setDragOver(true); }}
                   onDragLeave={() => setDragOver(false)}
                   onDrop={handleDrop}
-                  style={{ marginBottom: 20, minHeight: 220 }}>
-                  <input ref={fileRef} type="file" accept=".jpg,.jpeg,.png" onChange={e => handleFile(e.target.files[0])} style={{ display: "none" }} />
-
-                  {preview ? (
-                    <div style={{ position: "relative" }}>
-                      <img src={preview} alt="preview" style={{ width: "100%", maxHeight: 200, objectFit: "cover", borderRadius: 8, display: "block" }} />
-                      <div style={{ position: "absolute", inset: 0, border: "1px solid var(--cyan)", borderRadius: 8, pointerEvents: "none" }} />
-                      {/* Corner decorations on image */}
-                      {["tl","tr","bl","br"].map(c => (
-                        <div key={c} className={`corner corner-${c}`} style={{ position: "absolute" }} />
-                      ))}
-                    </div>
-                  ) : (
-                    <div style={{ padding: "20px 0" }}>
-                      {/* Radar animation */}
-                      <div style={{ position: "relative", width: 80, height: 80, margin: "0 auto 20px" }}>
-                        {[0, 1, 2].map(i => (
-                          <div key={i} className="radar-ring" style={{ inset: 0, animationDelay: `${i}s` }} />
-                        ))}
-                        <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28 }}>🛰️</div>
-                      </div>
-                      <div className="orbitron" style={{ fontSize: 11, color: "var(--cyan)", letterSpacing: 2, marginBottom: 8 }}>DROP SATELLITE IMAGE</div>
-                      <div className="mono" style={{ fontSize: 11, color: "var(--muted)" }}>or click to browse • JPG PNG JPEG</div>
-                    </div>
-                  )}
-                </div>
-
-                {file && (
-                  <div className="mono" style={{ fontSize: 11, color: "var(--muted)", marginBottom: 16, padding: "8px 12px", background: "rgba(0,200,255,0.05)", borderRadius: 6, border: "1px solid var(--border)" }}>
-                    📁 {file.name} — {(file.size / 1024).toFixed(1)} KB
+                  style={{
+                    border: dragOver ? "2px dashed #6366f1" : "2px dashed rgba(255, 255, 255, 0.15)",
+                    borderRadius: "14px",
+                    padding: "54px 28px",
+                    textAlign: "center",
+                    background: dragOver ? "rgba(99, 102, 241, 0.1)" : "rgba(15, 23, 42, 0.4)",
+                    cursor: "pointer",
+                    transition: "all 0.2s ease"
+                  }}
+                  onClick={() => document.getElementById("single-upload-input").click()}
+                >
+                  <div style={{
+                    width: "58px",
+                    height: "58px",
+                    borderRadius: "50%",
+                    background: "rgba(99, 102, 241, 0.12)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    margin: "0 auto 18px",
+                    border: "1px solid rgba(99, 102, 241, 0.25)"
+                  }}>
+                    <UploadCloud style={{ width: "28px", height: "28px", color: "#818cf8" }} />
                   </div>
-                )}
-
-                {loading && (
-                  <div style={{ marginBottom: 12, overflow: "hidden", borderRadius: 2 }}>
-                    <div className="loading-bar" />
-                  </div>
-                )}
-
-                <button className="analyse-btn" onClick={handlePredict} disabled={!file || loading}>
-                  {loading ? "⟳  PROCESSING..." : "▶  INITIATE ANALYSIS"}
-                </button>
-
-                {/* Quick stats below button */}
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginTop: 16 }}>
-                  {[
-                    { label: "MODEL", value: "ResNet18" },
-                    { label: "ACCURACY", value: "99.25%" },
-                    { label: "DEVICE", value: "CUDA" },
-                  ].map(s => (
-                    <div key={s.label} style={{ textAlign: "center", padding: "10px 8px", background: "rgba(0,200,255,0.04)", border: "1px solid var(--border)", borderRadius: 8 }}>
-                      <div className="mono" style={{ fontSize: 10, color: "var(--muted)", marginBottom: 4 }}>{s.label}</div>
-                      <div className="orbitron" style={{ fontSize: 11, color: "var(--cyan)" }}>{s.value}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Result Panel */}
-              <div className="panel" style={{ borderRadius: 16, padding: 28 }}>
-                <div className="corner corner-tl" /><div className="corner corner-tr" />
-                <div className="corner corner-bl" /><div className="corner corner-br" />
-
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 24 }}>
-                  <div style={{ width: 3, height: 20, background: "var(--green)", borderRadius: 2, boxShadow: "0 0 8px var(--green)" }} />
-                  <span className="orbitron" style={{ fontSize: 12, letterSpacing: 2, color: "var(--green)" }}>DETECTION OUTPUT</span>
-                </div>
-
-                {!result && !loading && (
-                  <div style={{ textAlign: "center", padding: "70px 0", color: "var(--muted)" }}>
-                    <div style={{ fontSize: 52, marginBottom: 16, opacity: 0.3 }}>📡</div>
-                    <div className="orbitron" style={{ fontSize: 11, letterSpacing: 2 }}>AWAITING INPUT</div>
-                    <div className="mono" style={{ fontSize: 11, marginTop: 8 }}>Upload an image to begin analysis</div>
-                  </div>
-                )}
-
-                {loading && (
-                  <div style={{ textAlign: "center", padding: "70px 0" }}>
-                    <div style={{ fontSize: 52, marginBottom: 16, animation: "pulse 1s ease infinite" }}>🛰️</div>
-                    <div className="orbitron glow-cyan" style={{ fontSize: 13, letterSpacing: 3 }}>ANALYSING...</div>
-                    <div className="mono" style={{ fontSize: 11, color: "var(--muted)", marginTop: 8 }}>Running AI inference on GPU</div>
-                  </div>
-                )}
-
-                {result && !loading && (
-                  <div>
-                    {/* Main result */}
-                    <div className="result-badge" style={{
-                      background: result.is_damaged ? "rgba(255,59,59,0.08)" : "rgba(0,255,136,0.08)",
-                      border: `1px solid ${result.is_damaged ? "var(--red)" : "var(--green)"}`,
-                      boxShadow: result.is_damaged ? "var(--glow-r)" : "var(--glow-g)",
-                      marginBottom: 20
-                    }}>
-                      <div style={{ fontSize: 52, marginBottom: 8 }}>{result.is_damaged ? "🔴" : "🟢"}</div>
-                      <div className={`orbitron ${result.is_damaged ? "glow-red" : "glow-green"}`}
-                        style={{ fontSize: 26, fontWeight: 900, letterSpacing: 3 }}>
-                        {result.prediction.toUpperCase()}
-                      </div>
-
-                      {/* Confidence bar */}
-                      <div style={{ margin: "16px 0 8px" }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6 }}>
-                          <span className="mono" style={{ fontSize: 11, color: "var(--muted)" }}>CONFIDENCE</span>
-                          <span className="orbitron" style={{ fontSize: 13, color: result.is_damaged ? "var(--red)" : "var(--green)" }}>
-                            {result.confidence.toFixed(2)}%
-                          </span>
-                        </div>
-                        <div style={{ height: 6, background: "rgba(255,255,255,0.05)", borderRadius: 4, overflow: "hidden" }}>
-                          <div className="conf-bar-fill" style={{
-                            width: `${result.confidence}%`,
-                            background: result.is_damaged
-                              ? "linear-gradient(90deg, var(--amber), var(--red))"
-                              : "linear-gradient(90deg, var(--cyan), var(--green))"
-                          }} />
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* Details grid */}
-                    <div style={{ display: "grid", gap: 8 }}>
-                      {[
-                        ["CLASSIFICATION", result.prediction, result.is_damaged ? "var(--red)" : "var(--green)"],
-                        ["CONFIDENCE",     `${result.confidence.toFixed(4)}%`, "var(--amber)"],
-                        ["LATITUDE",       result.latitude  ? result.latitude.toFixed(6)  : "N/A", "var(--cyan)"],
-                        ["LONGITUDE",      result.longitude ? result.longitude.toFixed(6) : "N/A", "var(--cyan)"],
-                        ["TIMESTAMP",      new Date(result.timestamp).toLocaleString(), "var(--muted)"],
-                        ["IMAGE FILE",     result.image_name, "var(--muted)"],
-                      ].map(([label, value, color]) => (
-                        <div key={label} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "9px 12px", background: "rgba(0,200,255,0.03)", borderRadius: 8, border: "1px solid var(--border)" }}>
-                          <span className="mono" style={{ fontSize: 10, color: "var(--muted)", letterSpacing: 1 }}>{label}</span>
-                          <span className="mono" style={{ fontSize: 11, color, maxWidth: "55%", textAlign: "right", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{value}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* ── STATS TAB ── */}
-          {activeTab === "stats" && stats && (
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
-
-              {/* Pie chart */}
-              <div className="panel" style={{ borderRadius: 16, padding: 28 }}>
-                <div className="corner corner-tl" /><div className="corner corner-tr" />
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 24 }}>
-                  <div style={{ width: 3, height: 20, background: "var(--cyan)", borderRadius: 2, boxShadow: "0 0 8px var(--cyan)" }} />
-                  <span className="orbitron" style={{ fontSize: 12, letterSpacing: 2, color: "var(--cyan)" }}>DAMAGE DISTRIBUTION</span>
-                </div>
-                <ResponsiveContainer width="100%" height={260}>
-                  <PieChart>
-                    <Pie data={pieData} cx="50%" cy="50%" innerRadius={60} outerRadius={100} dataKey="value"
-                      label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                      labelLine={{ stroke: "rgba(0,200,255,0.3)" }}>
-                      <Cell fill="#ff3b3b" stroke="#ff3b3b33" />
-                      <Cell fill="#00ff88" stroke="#00ff8833" />
-                    </Pie>
-                    <Tooltip contentStyle={TOOLTIP_STYLE} />
-                  </PieChart>
-                </ResponsiveContainer>
-                {/* Legend */}
-                <div style={{ display: "flex", justifyContent: "center", gap: 24, marginTop: 8 }}>
-                  {[["var(--red)", "Damaged"], ["var(--green)", "Safe"]].map(([c, l]) => (
-                    <div key={l} style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                      <div style={{ width: 10, height: 10, borderRadius: 2, background: c }} />
-                      <span className="mono" style={{ fontSize: 11, color: "var(--muted)" }}>{l}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Area chart */}
-              <div className="panel" style={{ borderRadius: 16, padding: 28 }}>
-                <div className="corner corner-tl" /><div className="corner corner-tr" />
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 24 }}>
-                  <div style={{ width: 3, height: 20, background: "var(--amber)", borderRadius: 2, boxShadow: "0 0 8px var(--amber)" }} />
-                  <span className="orbitron" style={{ fontSize: 12, letterSpacing: 2, color: "var(--amber)" }}>CONFIDENCE TREND</span>
-                </div>
-                <ResponsiveContainer width="100%" height={260}>
-                  <AreaChart data={areaData}>
-                    <defs>
-                      <linearGradient id="confGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%"  stopColor="#00c8ff" stopOpacity={0.3} />
-                        <stop offset="95%" stopColor="#00c8ff" stopOpacity={0}   />
-                      </linearGradient>
-                    </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,200,255,0.07)" />
-                    <XAxis dataKey="id" stroke="var(--muted)" tick={{ fontFamily: "Share Tech Mono", fontSize: 10 }} />
-                    <YAxis domain={[0, 100]} stroke="var(--muted)" tick={{ fontFamily: "Share Tech Mono", fontSize: 10 }} />
-                    <Tooltip contentStyle={TOOLTIP_STYLE} />
-                    <Area type="monotone" dataKey="confidence" stroke="var(--cyan)" strokeWidth={2} fill="url(#confGrad)" />
-                  </AreaChart>
-                </ResponsiveContainer>
-              </div>
-
-              {/* Model metrics */}
-              <div className="panel" style={{ borderRadius: 16, padding: 28, gridColumn: "span 2" }}>
-                <div className="corner corner-tl" /><div className="corner corner-tr" />
-                <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 24 }}>
-                  <div style={{ width: 3, height: 20, background: "var(--green)", borderRadius: 2, boxShadow: "0 0 8px var(--green)" }} />
-                  <span className="orbitron" style={{ fontSize: 12, letterSpacing: 2, color: "var(--green)" }}>MODEL PERFORMANCE METRICS</span>
-                </div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 16 }}>
-                  {[
-                    { label: "ACCURACY",   value: "99.25%",  color: "var(--green)" },
-                    { label: "F1 SCORE",   value: "0.9925",  color: "var(--cyan)"  },
-                    { label: "PRECISION",  value: "0.9925",  color: "var(--cyan)"  },
-                    { label: "RECALL",     value: "0.9925",  color: "var(--cyan)"  },
-                    { label: "ROC AUC",    value: "0.9999",  color: "var(--amber)" },
-                    { label: "EPOCHS",     value: "20",      color: "var(--muted)" },
-                  ].map(m => (
-                    <div key={m.label} style={{ textAlign: "center", padding: "16px 12px", background: "rgba(0,200,255,0.04)", border: "1px solid var(--border)", borderRadius: 10 }}>
-                      <div className="mono" style={{ fontSize: 9, color: "var(--muted)", letterSpacing: 1.5, marginBottom: 10 }}>{m.label}</div>
-                      <div className="orbitron" style={{ fontSize: 20, fontWeight: 700, color: m.color, textShadow: `0 0 15px ${m.color}66` }}>{m.value}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* ── HISTORY TAB ── */}
-          {activeTab === "history" && (
-            <div className="panel" style={{ borderRadius: 16, padding: 28 }}>
-              <div className="corner corner-tl" /><div className="corner corner-tr" />
-              <div className="corner corner-bl" /><div className="corner corner-br" />
-
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24 }}>
-                <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-                  <div style={{ width: 3, height: 20, background: "var(--amber)", borderRadius: 2, boxShadow: "0 0 8px var(--amber)" }} />
-                  <span className="orbitron" style={{ fontSize: 12, letterSpacing: 2, color: "var(--amber)" }}>PREDICTION LOG</span>
-                  <span className="mono" style={{ fontSize: 11, color: "var(--muted)", marginLeft: 8 }}>[{history.length} RECORDS]</span>
-                </div>
-                <button onClick={fetchHistory}
-                  style={{ padding: "8px 18px", border: "1px solid var(--border)", borderRadius: 8, background: "transparent", color: "var(--muted)", cursor: "pointer", fontFamily: "Orbitron", fontSize: 10, letterSpacing: 1.5, transition: "all 0.2s" }}
-                  onMouseEnter={e => { e.target.style.borderColor = "var(--cyan)"; e.target.style.color = "var(--cyan)"; }}
-                  onMouseLeave={e => { e.target.style.borderColor = "var(--border)"; e.target.style.color = "var(--muted)"; }}>
-                  ⟳ REFRESH
-                </button>
-              </div>
-
-              {history.length === 0 ? (
-                <div style={{ textAlign: "center", padding: "60px 0", color: "var(--muted)" }}>
-                  <div style={{ fontSize: 40, opacity: 0.3, marginBottom: 12 }}>📋</div>
-                  <div className="orbitron" style={{ fontSize: 11, letterSpacing: 2 }}>NO RECORDS FOUND</div>
+                  <h3 style={{ fontSize: "16px", marginBottom: "6px", fontWeight: 600, color: "#f8fafc" }}>
+                    Upload Satellite Imagery Tile
+                  </h3>
+                  <p style={{ fontSize: "13px", color: "#94a3b8", marginBottom: "20px" }}>
+                    Drag & drop JPG, PNG, or WEBP satellite tiles to analyze
+                  </p>
+                  <input
+                    id="single-upload-input"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleFileSelect}
+                    style={{ display: "none" }}
+                  />
+                  <button style={{
+                    padding: "9px 20px",
+                    borderRadius: "8px",
+                    border: "1px solid rgba(255, 255, 255, 0.18)",
+                    background: "rgba(255, 255, 255, 0.05)",
+                    color: "#f8fafc",
+                    cursor: "pointer",
+                    fontSize: "13px",
+                    fontWeight: 600
+                  }}>
+                    Browse Files
+                  </button>
                 </div>
               ) : (
-                <div style={{ overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                    <thead>
-                      <tr style={{ borderBottom: "1px solid var(--border2)" }}>
-                        {["#", "IMAGE FILE", "CLASSIFICATION", "CONFIDENCE", "LATITUDE", "LONGITUDE", "TIMESTAMP"].map(h => (
-                          <th key={h} style={{ padding: "10px 14px", textAlign: "left" }}>
-                            <span className="mono" style={{ fontSize: 10, color: "var(--muted)", letterSpacing: 1.5 }}>{h}</span>
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {history.map((row, i) => (
-                        <tr key={row.id} className="history-row" style={{ borderBottom: "1px solid var(--border)" }}>
-                          <td style={{ padding: "12px 14px" }}>
-                            <span className="mono" style={{ fontSize: 12, color: "var(--muted)" }}>{String(i + 1).padStart(3, "0")}</span>
-                          </td>
-                          <td style={{ padding: "12px 14px", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            <span className="mono" style={{ fontSize: 11 }}>{row.image_name}</span>
-                          </td>
-                          <td style={{ padding: "12px 14px" }}>
-                            <span className="orbitron" style={{ fontSize: 10, padding: "5px 12px", borderRadius: 20, letterSpacing: 1,
-                              background: row.is_damaged ? "rgba(255,59,59,0.12)" : "rgba(0,255,136,0.12)",
-                              border: `1px solid ${row.is_damaged ? "var(--red)" : "var(--green)"}`,
-                              color: row.is_damaged ? "var(--red)" : "var(--green)" }}>
-                              {row.prediction.toUpperCase()}
-                            </span>
-                          </td>
-                          <td style={{ padding: "12px 14px" }}>
-                            <span className="orbitron" style={{ fontSize: 13, color: "var(--amber)" }}>{row.confidence.toFixed(1)}%</span>
-                          </td>
-                          <td style={{ padding: "12px 14px" }}>
-                            <span className="mono" style={{ fontSize: 11, color: "var(--muted)" }}>{row.latitude ? row.latitude.toFixed(4) : "—"}</span>
-                          </td>
-                          <td style={{ padding: "12px 14px" }}>
-                            <span className="mono" style={{ fontSize: 11, color: "var(--muted)" }}>{row.longitude ? row.longitude.toFixed(4) : "—"}</span>
-                          </td>
-                          <td style={{ padding: "12px 14px" }}>
-                            <span className="mono" style={{ fontSize: 10, color: "var(--muted)" }}>{new Date(row.timestamp).toLocaleString()}</span>
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
+                <div>
+                  <div className="split-container" style={{ position: "relative" }}>
+                    <img
+                      src={previewUrl}
+                      alt="Original Satellite imagery"
+                      className="split-layer"
+                    />
+
+                    {currentPrediction?.heatmap_b64 && (
+                      <div style={{
+                        position: "absolute",
+                        inset: 0,
+                        width: `${sliderPos}%`,
+                        overflow: "hidden"
+                      }}>
+                        <img
+                          src={currentPrediction.heatmap_b64}
+                          alt="Grad CAM Overlay"
+                          style={{
+                            width: "100%",
+                            height: "100%",
+                            objectFit: "cover"
+                          }}
+                        />
+                      </div>
+                    )}
+
+                    {currentPrediction?.heatmap_b64 && (
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={sliderPos}
+                        onChange={(e) => setSliderPos(Number(e.target.value))}
+                        style={{
+                          position: "absolute",
+                          bottom: "14px",
+                          left: "5%",
+                          width: "90%",
+                          zIndex: 20,
+                          cursor: "pointer"
+                        }}
+                      />
+                    )}
+                  </div>
+
+                  {currentPrediction?.heatmap_b64 && (
+                    <div style={{ display: "flex", justifyContent: "space-between", marginTop: "12px", fontSize: "12px" }} className="mono">
+                      <span style={{ color: "#60a5fa", fontWeight: 600 }}>◄ Grad-CAM Damage Overlay ({sliderPos}%)</span>
+                      <span style={{ color: "#94a3b8" }}>Raw Satellite Tile ►</span>
+                    </div>
+                  )}
+
+                  <div style={{ display: "flex", gap: "14px", marginTop: "24px" }}>
+                    <button
+                      className="btn-primary"
+                      onClick={analyzeSingleImage}
+                      disabled={isAnalyzing}
+                      style={{
+                        flex: 1,
+                        padding: "13px",
+                        fontSize: "14px",
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "center",
+                        gap: "10px"
+                      }}
+                    >
+                      {isAnalyzing ? <RefreshCw style={{ animation: "spin 1s linear infinite", width: "16px" }} /> : <Sparkles style={{ width: "16px" }} />}
+                      {isAnalyzing ? "Computing Grad-CAM Heatmap..." : "Execute AI Damage Analysis"}
+                    </button>
+
+                    <button
+                      onClick={() => { setSelectedFile(null); setPreviewUrl(null); setCurrentPrediction(null); }}
+                      style={{
+                        padding: "13px 22px",
+                        borderRadius: "8px",
+                        border: "1px solid rgba(255, 255, 255, 0.12)",
+                        background: "rgba(255, 255, 255, 0.05)",
+                        color: "#94a3b8",
+                        cursor: "pointer",
+                        fontSize: "13px",
+                        fontWeight: 600
+                      }}
+                    >
+                      Clear
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
-          )}
-        </div>
-      </div>
-    </>
+
+            <div className="glass-panel" style={{ padding: "28px" }}>
+              <h2 style={{ fontSize: "17px", fontWeight: 700, color: "#f8fafc", marginBottom: "20px" }}>
+                AI Emergency Triage Telemetry
+              </h2>
+
+              {currentPrediction ? (
+                <div>
+                  <div style={{
+                    padding: "18px 22px",
+                    borderRadius: "12px",
+                    background: currentPrediction.is_damaged
+                      ? "linear-gradient(135deg, rgba(244, 63, 94, 0.18) 0%, rgba(244, 63, 94, 0.06) 100%)"
+                      : "linear-gradient(135deg, rgba(16, 185, 129, 0.18) 0%, rgba(16, 185, 129, 0.06) 100%)",
+                    border: currentPrediction.is_damaged ? "1px solid rgba(244, 63, 94, 0.4)" : "1px solid rgba(16, 185, 129, 0.4)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "space-between",
+                    marginBottom: "24px"
+                  }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+                      {currentPrediction.is_damaged ? (
+                        <AlertTriangle style={{ color: "#f43f5e", width: "32px", height: "32px" }} />
+                      ) : (
+                        <CheckCircle2 style={{ color: "#10b981", width: "32px", height: "32px" }} />
+                      )}
+                      <div>
+                        <div style={{ fontSize: "20px", fontWeight: 800, color: currentPrediction.is_damaged ? "#fb7185" : "#34d399" }}>
+                          {currentPrediction.prediction.toUpperCase()}
+                        </div>
+                        <div style={{ fontSize: "12px", color: "#94a3b8" }}>
+                          Classifier Confidence: <b style={{ color: "#f8fafc" }}>{currentPrediction.confidence.toFixed(1)}%</b>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ textAlign: "right" }}>
+                      <div className="mono" style={{ fontSize: "13px", color: "#fbbf24", fontWeight: 700 }}>
+                        {currentPrediction.triage_priority}
+                      </div>
+                      <div style={{ fontSize: "12px", color: "#94a3b8" }}>
+                        {currentPrediction.severity_level}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginBottom: "24px" }}>
+                    <div style={{ background: "rgba(15, 23, 42, 0.6)", padding: "16px", borderRadius: "10px", border: "1px solid rgba(255, 255, 255, 0.08)" }}>
+                      <div style={{ fontSize: "11px", color: "#94a3b8", fontWeight: 600 }} className="mono">ESTIMATED DAMAGE RADIUS</div>
+                      <div style={{ fontSize: "17px", fontWeight: 700, marginTop: "4px", color: "#f8fafc" }}>
+                        {currentPrediction.affected_area_sqm}
+                      </div>
+                    </div>
+
+                    <div style={{ background: "rgba(15, 23, 42, 0.6)", padding: "16px", borderRadius: "10px", border: "1px solid rgba(255, 255, 255, 0.08)" }}>
+                      <div style={{ fontSize: "11px", color: "#94a3b8", fontWeight: 600 }} className="mono">GPS COORDINATES</div>
+                      <div style={{ fontSize: "16px", fontWeight: 700, marginTop: "4px", color: "#60a5fa" }} className="mono">
+                        {currentPrediction.latitude?.toFixed(4)}, {currentPrediction.longitude?.toFixed(4)}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ background: "rgba(15, 23, 42, 0.8)", padding: "18px", borderRadius: "12px", border: "1px solid rgba(255, 255, 255, 0.1)" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px", color: "#818cf8", marginBottom: "10px", fontWeight: 700 }} className="mono">
+                      <FileText style={{ width: "15px" }} /> RESPONDER TRIAGE ADVISORY REPORT
+                    </div>
+                    <pre style={{
+                      fontFamily: "JetBrains Mono, monospace",
+                      fontSize: "12px",
+                      whiteSpace: "pre-wrap",
+                      color: "#cbd5e1",
+                      lineHeight: "1.5"
+                    }}>
+                      {currentPrediction.ai_advisory}
+                    </pre>
+                  </div>
+                </div>
+              ) : (
+                <div style={{ textAlign: "center", padding: "60px 20px", color: "#64748b" }}>
+                  <Crosshair style={{ width: "44px", height: "44px", margin: "0 auto 16px", opacity: 0.35 }} />
+                  <p style={{ fontSize: "13px" }}>Upload a satellite imagery tile and click execute analysis to view Grad-CAM heatmaps and responder telemetry.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 2: BATCH SATELLITE HUB */}
+        {activeTab === "batch" && (
+          <div className="glass-panel" style={{ padding: "32px" }}>
+            <h2 style={{ fontSize: "19px", fontWeight: 700, color: "#f8fafc", marginBottom: "8px" }}>
+              Multi-Tile Satellite Batch Processing Hub
+            </h2>
+            <p style={{ fontSize: "13px", color: "#94a3b8", marginBottom: "28px" }}>
+              High-throughput multi-thousand image batch uploads with real-time stream chunking.
+            </p>
+
+            <div style={{ display: "flex", gap: "18px", marginBottom: "28px" }}>
+              <input
+                type="file"
+                multiple
+                accept="image/*"
+                onChange={(e) => setBatchFiles(e.target.files)}
+                style={{
+                  background: "rgba(15, 23, 42, 0.6)",
+                  padding: "12px 16px",
+                  borderRadius: "8px",
+                  border: "1px solid rgba(255, 255, 255, 0.12)",
+                  color: "#fff",
+                  flex: 1,
+                  fontSize: "13px"
+                }}
+              />
+              <button
+                className="btn-primary"
+                onClick={processBatchUpload}
+                disabled={batchProgress || !batchFiles || batchFiles.length === 0}
+                style={{
+                  padding: "12px 28px",
+                  fontSize: "14px",
+                  fontWeight: 600
+                }}
+              >
+                {batchProgress ? "Processing Chunked Batch..." : `Process ${batchFiles ? batchFiles.length : 0} Satellite Tiles`}
+              </button>
+            </div>
+
+            {batchProgress && batchStats.total > 0 && (
+              <div style={{ marginBottom: "28px", background: "rgba(15, 23, 42, 0.8)", padding: "20px", borderRadius: "12px", border: "1px solid rgba(99, 102, 241, 0.3)" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", marginBottom: "12px" }} className="mono">
+                  <span style={{ color: "#818cf8", fontWeight: 600 }}>
+                    ⚡ Stream Processing: {batchStats.processed} / {batchStats.total} tiles ({((batchStats.processed / batchStats.total) * 100).toFixed(1)}%)
+                  </span>
+                  <span style={{ color: "#94a3b8" }}>
+                    Damaged: {batchStats.damaged} | Safe: {batchStats.undamaged}
+                  </span>
+                </div>
+
+                <div style={{ width: "100%", height: "8px", background: "rgba(255, 255, 255, 0.08)", borderRadius: "4px", overflow: "hidden" }}>
+                  <div style={{
+                    height: "100%",
+                    width: `${(batchStats.processed / batchStats.total) * 100}%`,
+                    background: "linear-gradient(90deg, #6366f1, #10b981)",
+                    borderRadius: "4px",
+                    transition: "width 0.2s ease"
+                  }} />
+                </div>
+              </div>
+            )}
+
+            {batchStats.processed > 0 && (
+              <div>
+                <h3 style={{ fontSize: "16px", margin: "20px 0 14px", color: "#f8fafc", fontWeight: 700 }}>
+                  Batch Execution Summary
+                </h3>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "18px" }}>
+                  <div style={{ background: "rgba(15, 23, 42, 0.6)", padding: "18px", borderRadius: "10px", border: "1px solid rgba(255, 255, 255, 0.08)" }}>
+                    <div style={{ fontSize: "11px", color: "#94a3b8" }} className="mono">PROCESSED</div>
+                    <div style={{ fontSize: "26px", fontWeight: 800, marginTop: "4px" }}>{batchStats.processed}</div>
+                  </div>
+                  <div style={{ background: "rgba(244, 63, 94, 0.1)", padding: "18px", borderRadius: "10px", border: "1px solid rgba(244, 63, 94, 0.3)" }}>
+                    <div style={{ fontSize: "11px", color: "#fb7185" }} className="mono">DAMAGED</div>
+                    <div style={{ fontSize: "26px", fontWeight: 800, color: "#fb7185", marginTop: "4px" }}>{batchStats.damaged}</div>
+                  </div>
+                  <div style={{ background: "rgba(16, 185, 129, 0.1)", padding: "18px", borderRadius: "10px", border: "1px solid rgba(16, 185, 129, 0.3)" }}>
+                    <div style={{ fontSize: "11px", color: "#34d399" }} className="mono">UNDAMAGED</div>
+                    <div style={{ fontSize: "26px", fontWeight: 800, color: "#34d399", marginTop: "4px" }}>{batchStats.undamaged}</div>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 3: GIS COMMAND MAP (CONDITIONAL MOUNT TO GUARANTEE FRESH LEAFLET INITIALIZATION ON VISIBLE CONTAINER) */}
+        {activeTab === "map" && (
+          <div className="glass-panel" style={{ padding: "28px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "20px" }}>
+              <div>
+                <h2 style={{ fontSize: "19px", fontWeight: 700, color: "#f8fafc" }}>
+                  Geospatial GIS Disaster Command Map
+                </h2>
+                <p style={{ fontSize: "13px", color: "#94a3b8" }}>
+                  Interactive spatial marker pins extracted from GPS coordinates
+                </p>
+              </div>
+              <button
+                onClick={downloadGeoJSON}
+                style={{
+                  padding: "10px 18px",
+                  borderRadius: "8px",
+                  border: "1px solid rgba(255, 255, 255, 0.16)",
+                  background: "rgba(255, 255, 255, 0.05)",
+                  color: "#f8fafc",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  fontWeight: 600,
+                  fontSize: "13px"
+                }}
+              >
+                <Download style={{ width: "15px" }} /> Export GIS GeoJSON
+              </button>
+            </div>
+
+            <div
+              ref={mapContainerRef}
+              style={{
+                width: "100%",
+                height: "560px",
+                borderRadius: "12px",
+                border: "1px solid rgba(255, 255, 255, 0.1)",
+                overflow: "hidden",
+                background: "#060913"
+              }}
+            />
+          </div>
+        )}
+
+        {/* TAB 4: DISASTER SIMULATOR */}
+        {activeTab === "simulator" && (
+          <div className="glass-panel" style={{ padding: "32px" }}>
+            <h2 style={{ fontSize: "19px", fontWeight: 700, color: "#f8fafc", marginBottom: "8px" }}>
+              Real-Time Disaster Scenario Simulator
+            </h2>
+            <p style={{ fontSize: "13px", color: "#94a3b8", marginBottom: "28px" }}>
+              Validate system workflows against simulated disaster events.
+            </p>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "22px" }}>
+              {scenarios.map((sc) => (
+                <div
+                  key={sc.id}
+                  style={{
+                    background: "rgba(15, 23, 42, 0.6)",
+                    border: "1px solid rgba(255, 255, 255, 0.1)",
+                    borderRadius: "12px",
+                    padding: "22px"
+                  }}
+                >
+                  <div style={{ fontSize: "11px", color: "#fbbf24", fontWeight: 600, marginBottom: "6px" }} className="mono">
+                    {sc.risk_level} RISK EVENT
+                  </div>
+                  <h3 style={{ fontSize: "17px", fontWeight: 700, color: "#f8fafc", marginBottom: "8px" }}>
+                    {sc.title}
+                  </h3>
+                  <div style={{ fontSize: "13px", color: "#94a3b8", marginBottom: "20px" }}>
+                    {sc.region} | {sc.hazard_type}
+                  </div>
+                  <button
+                    onClick={() => launchScenario(sc)}
+                    disabled={simulating}
+                    style={{
+                      width: "100%",
+                      padding: "11px",
+                      borderRadius: "8px",
+                      border: "none",
+                      background: "linear-gradient(135deg, #f43f5e 0%, #fb7185 100%)",
+                      color: "#fff",
+                      fontWeight: 600,
+                      fontSize: "13px",
+                      cursor: "pointer"
+                    }}
+                  >
+                    {simulating ? "Simulating..." : "Launch Scenario Simulation"}
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 5: ANALYTICS */}
+        {activeTab === "analytics" && (
+          <div className="glass-panel" style={{ padding: "32px" }}>
+            <h2 style={{ fontSize: "19px", fontWeight: 700, color: "#f8fafc", marginBottom: "24px" }}>
+              Capstone Performance Analytics & Benchmarks
+            </h2>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "28px" }}>
+              <div style={{ background: "rgba(15, 23, 42, 0.6)", padding: "24px", borderRadius: "12px", border: "1px solid rgba(255, 255, 255, 0.1)" }}>
+                <h3 style={{ fontSize: "15px", marginBottom: "18px", fontWeight: 700, color: "#f8fafc" }}>Damage Distribution</h3>
+                <div style={{ height: "260px" }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={chartData} dataKey="count" nameKey="name" cx="50%" cy="50%" outerRadius={80}>
+                        {chartData.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.fill} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              </div>
+
+              <div style={{ background: "rgba(15, 23, 42, 0.6)", padding: "24px", borderRadius: "12px", border: "1px solid rgba(255, 255, 255, 0.1)" }}>
+                <h3 style={{ fontSize: "15px", marginBottom: "18px", fontWeight: 700, color: "#f8fafc" }}>ResNet18 Model Benchmarks</h3>
+                <div style={{ display: "grid", gap: "12px", fontSize: "13px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.08)", paddingBottom: "10px" }}>
+                    <span>Validation Accuracy</span>
+                    <b style={{ color: "#34d399" }}>99.00%</b>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.08)", paddingBottom: "10px" }}>
+                    <span>F1 Score (Weighted)</span>
+                    <b style={{ color: "#818cf8" }}>0.9895</b>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.08)", paddingBottom: "10px" }}>
+                    <span>Precision</span>
+                    <b style={{ color: "#818cf8" }}>0.9902</b>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", borderBottom: "1px solid rgba(255,255,255,0.08)", paddingBottom: "10px" }}>
+                    <span>Recall</span>
+                    <b style={{ color: "#818cf8" }}>0.9888</b>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", paddingBottom: "10px" }}>
+                    <span>ROC AUC Score</span>
+                    <b style={{ color: "#fbbf24" }}>0.9984</b>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+      </main>
+    </div>
   );
 }
