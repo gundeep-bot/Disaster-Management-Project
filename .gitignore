@@ -1,0 +1,17 @@
+# Python Environment
+venv/
+
+# Large Datasets and Archives
+*.tgz*
+*.part-*
+test/
+test_another/
+train_another/
+validation_another/
+
+# Databases
+*.db
+
+# ML Models and Outputs
+models/
+outputs/
